@@ -1,10 +1,11 @@
 package router
 
 import (
+	"github.com/ozonmp/omp-bot/internal/app/commands/activity"
 	"log"
+	"runtime/debug"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
-	"github.com/ozonmp/omp-bot/internal/app/commands/demo"
 	"github.com/ozonmp/omp-bot/internal/app/path"
 )
 
@@ -17,8 +18,8 @@ type Router struct {
 	// bot
 	bot *tgbotapi.BotAPI
 
-	// demoCommander
-	demoCommander Commander
+	// commander
+	activityCommander Commander
 	// user
 	// access
 	// buy
@@ -52,8 +53,8 @@ func NewRouter(
 	return &Router{
 		// bot
 		bot: bot,
-		// demoCommander
-		demoCommander: demo.NewDemoCommander(bot),
+		// commander
+		activityCommander: activity.NewActivityCommander(bot),
 		// user
 		// access
 		// buy
@@ -85,7 +86,7 @@ func NewRouter(
 func (c *Router) HandleUpdate(update tgbotapi.Update) {
 	defer func() {
 		if panicValue := recover(); panicValue != nil {
-			log.Printf("recovered from panic: %v", panicValue)
+			log.Printf("recovered from panic: %v\n%v", panicValue, string(debug.Stack()))
 		}
 	}()
 
@@ -105,8 +106,8 @@ func (c *Router) handleCallback(callback *tgbotapi.CallbackQuery) {
 	}
 
 	switch callbackPath.Domain {
-	case "demo":
-		c.demoCommander.HandleCallback(callback, callbackPath)
+	case "activity":
+		c.activityCommander.HandleCallback(callback, callbackPath)
 	case "user":
 		break
 	case "access":
@@ -172,12 +173,22 @@ func (c *Router) handleMessage(msg *tgbotapi.Message) {
 	commandPath, err := path.ParseCommand(msg.Command())
 	if err != nil {
 		log.Printf("Router.handleCallback: error parsing callback data `%s` - %v", msg.Command(), err)
+
+		msg := tgbotapi.NewMessage(
+			msg.Chat.ID,
+			"Error while parsing command",
+		)
+
+		_, err = c.bot.Send(msg)
+		if err != nil {
+			log.Printf("Router.handleCallback: error sending reply message to chat - %v", err)
+		}
 		return
 	}
 
 	switch commandPath.Domain {
-	case "demo":
-		c.demoCommander.HandleCommand(msg, commandPath)
+	case "activity":
+		c.activityCommander.HandleCommand(msg, commandPath)
 	case "user":
 		break
 	case "access":
